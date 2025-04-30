@@ -2,10 +2,8 @@ name: Dynamic Daily Temperature Scraper
 
 on:
   schedule:
-    - cron: '0 0 * * *'  # First run at 12:00 AM PKT (UTC+5)
-    - cron: '0 8 * * *'  # Second run at 8:00 AM PKT (UTC+5)
-    - cron: '0 16 * * *' # Third run at 4:00 PM PKT (UTC+5)
-    - cron: '0 23 * * *' # Fourth run at 11:00 PM PKT (UTC+5)
+    - cron: '40 6 * * *'  # First run at 11:40 AM PKT (UTC+5)
+    - cron: '40 18 * * *'  # Second run at 11:40 PM PKT (UTC+5)
   workflow_dispatch:       # Manual trigger
 
 permissions:
