@@ -5,35 +5,35 @@ import time
 from tqdm import tqdm
 import os
 
-# URL for Max Temperature
+# Base URL for Max Temperature
 url = "https://nwfc.pmd.gov.pk/new/max-temp.php"
 
-# Session Setup
+# Start session
 session = requests.Session()
 session.headers.update({
     "User-Agent": "Mozilla/5.0"
 })
 
-# Step 1: Fetch station list
-res = session.get(url)
-soup = BeautifulSoup(res.text, 'html.parser')
+# Step 1: Fetch station options
+response = session.get(url)
+soup = BeautifulSoup(response.text, 'html.parser')
 stations = soup.select("select[name='station'] option")
 station_list = [(opt['value'], opt.text.strip()) for opt in stations if opt['value'].isdigit()]
 
-# Step 2: Data list
+# Step 2: Prepare to store scraped data
 temp_data = []
 
-# Step 3: Scrape each station
+# Step 3: Scrape each station using tqdm
 print("\n🌡️ Scraping Max Temperature Data...\n")
 for station_id, station_name in tqdm(station_list, desc="🔍 Scraping", unit="station"):
-    payload = {
+    form_data = {
         'station': station_id,
         'filter': 'station'
     }
 
     try:
-        response = session.post(url, data=payload, timeout=10)
-        page = BeautifulSoup(response.text, 'html.parser')
+        res = session.post(url, data=form_data, timeout=10)
+        page = BeautifulSoup(res.text, 'html.parser')
         table = page.find("table", class_="table table-bordered")
 
         if table:
@@ -57,33 +57,37 @@ for station_id, station_name in tqdm(station_list, desc="🔍 Scraping", unit="s
 
                     temp_data.append(record)
 
-                    # 👇 Live output
+                    # 👇 Live output row by row
                     print(f"{record['Station ID']}, {record['Station Name']}, {record['Province']}, "
                           f"{record['Reported Station']}, {record['Max Temp (°C)']}, {record['Date']}")
 
     except Exception as e:
         print(f"❌ Error scraping {station_name}: {e}")
 
-    time.sleep(0.5)
+    time.sleep(0.5)  # Respect server
 
-# Step 4: Create DataFrame
+# Step 4: Convert to DataFrame
 new_df = pd.DataFrame(temp_data)
 
-# Step 5: Merge with old CSV if exists
+# Step 5: Remove rows with blank or NaT in date before proceeding
+new_df = new_df[new_df['Date'].str.strip() != ""]
+
+# Step 6: Load existing CSV if exists, then merge
 csv_file = "pakistan_temperature_data.csv"
 if os.path.exists(csv_file):
-    old_df = pd.read_csv(csv_file)
-    combined_df = pd.concat([old_df, new_df], ignore_index=True)
+    existing_df = pd.read_csv(csv_file)
+    combined_df = pd.concat([existing_df, new_df], ignore_index=True)
 else:
     combined_df = new_df
 
-# Step 6: Clean up
+# Step 7: Convert Date column to datetime and clean
 combined_df['Date'] = pd.to_datetime(combined_df['Date'], errors='coerce', dayfirst=True)
-combined_df.drop_duplicates(inplace=True)
-combined_df = combined_df.sort_values(by='Date', ascending=False)
+combined_df = combined_df.dropna(subset=['Date'])  # Remove rows where Date couldn't be parsed
+combined_df = combined_df.drop_duplicates(subset=['Station ID', 'Date', 'Reported Station'])
 
-# Step 7: Save
+# Step 8: Sort and save
+combined_df = combined_df.sort_values(by='Date', ascending=False)
 combined_df.to_csv(csv_file, index=False)
 
-print("\n✅ Temperature scraping completed!")
-print(f"📁 Updated file: {csv_file}\n")
+print("\n✅ Max Temperature scraping completed successfully!")
+print(f"📁 Updated data saved to: {csv_file}\n")
